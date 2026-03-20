@@ -1,48 +1,45 @@
-// src/app/api/crosshairs/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "../../../lib/prisma"; // "@" alias hata verirse "../../../../lib/prisma" yapabilirsin
+import { prisma } from "../../../lib/prisma";
 
-// CROSSHAIR EKLEME (POST)
+// 1. Verileri Çekme (Sayfa yüklendiğinde çalışır)
+export async function GET() {
+  try {
+    const crosshairs = await prisma.crosshair.findMany({
+      include: {
+        user: {
+          select: { name: true, image: true }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return NextResponse.json(crosshairs);
+  } catch (error) {
+    return NextResponse.json({ error: "Error fetching" }, { status: 500 });
+  }
+}
+
+// 2. Yeni Crosshair Ekleme
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { title, shareCode, category, userId } = body;
 
-    if (!title || !shareCode || !category || !userId) {
-      return NextResponse.json({ error: "Lütfen tüm alanları doldurun." }, { status: 400 });
+    if (!title || !shareCode || !userId) {
+      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
     const newCrosshair = await prisma.crosshair.create({
       data: {
         title,
         shareCode,
-        category,
+        category: category || "community",
         userId,
       },
     });
 
-    return NextResponse.json(newCrosshair, { status: 201 });
+    return NextResponse.json(newCrosshair);
   } catch (error) {
-    console.error("Crosshair ekleme hatası:", error);
-    return NextResponse.json({ error: "Bu Crosshair kodu zaten eklenmiş olabilir." }, { status: 500 });
-  }
-}
-
-// VERİTABANINDAN CROSSHAIR'LERİ ÇEKME (GET)
-export async function GET() {
-  try {
-    const crosshairs = await prisma.crosshair.findMany({
-      orderBy: { createdAt: "desc" }, // En yeniler en üstte
-      include: {
-        user: {
-          select: { name: true, image: true }, // Kullanıcının adını ve avatarını da çekiyoruz
-        },
-      },
-    });
-
-    return NextResponse.json(crosshairs, { status: 200 });
-  } catch (error) {
-    console.error("Crosshair çekme hatası:", error);
-    return NextResponse.json({ error: "Veriler alınamadı." }, { status: 500 });
+    console.error("POST_ERROR:", error);
+    return NextResponse.json({ error: "Error creating" }, { status: 500 });
   }
 }
