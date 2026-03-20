@@ -433,8 +433,8 @@ export default function Home() {
                   <article key={cross.id}
                     className="group bg-[#0f0f11] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.14] hover:-translate-y-0.5 transition-all duration-200">
 
-                    {/* Preview */}
-                    <div className="relative bg-[#070708] aspect-[4/3] flex items-center justify-center border-b border-white/[0.06]">
+                    {/* Preview — sabit yükseklik, crosshair asla scale edilmez */}
+                    <div className="relative bg-[#070708] h-40 flex items-center justify-center border-b border-white/[0.06] overflow-hidden">
                       <CrosshairPreview shareCode={cross.shareCode} size={128} />
                       <div className="absolute top-3 left-3">
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
@@ -543,6 +543,7 @@ export default function Home() {
       <footer className="border-t border-white/5 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-700">
           <span>CS2CROSS<span className="text-red-600">HUB</span> — Community CS2 Crosshair Library</span>
+          <span className="text-center text-zinc-600 italic">Previews are approximate — some crosshairs may not reflect exact in-game appearance. Test in-game for accuracy.</span>
           <span>Not affiliated with Valve Corporation</span>
         </div>
       </footer>

@@ -18,6 +18,36 @@ const GAP_MAP: [number, number][] = [
   [-0.1, 2], [-0.05, 3], [0.00, 3], [1.0, 4], [2.0, 5], [3.0, 6], [4.0, 7],
 ];
 
+// CS2 preset renkleri (0-4 index)
+const CS2_PRESET_COLORS: [number, number, number][] = [
+  [255,   0,   0],  // 0: Kırmızı
+  [  0, 255,   0],  // 1: Yeşil
+  [255, 255,   0],  // 2: Sarı
+  [  0,   0, 255],  // 3: Mavi
+  [  0, 255, 255],  // 4: Cyan
+];
+
+const DICTIONARY = "ABCDEFGHJKLMNOPQRSTUVWXYZabcdefhijkmnopqrstuvwxyz23456789";
+
+// JS kütüphanesi color'u NaN döndürüyor (padding bug) — kendimiz decode ediyoruz
+function decodeColorIndex(shareCode: string): number {
+  try {
+    const code = shareCode.replace(/CSGO|-/g, "");
+    const chars = Array.from(code).reverse();
+    let big = BigInt(0);
+    const dictLen = BigInt(DICTIONARY.length);
+    for (const ch of chars) {
+      big = big * dictLen + BigInt(DICTIONARY.indexOf(ch));
+    }
+    const hex = big.toString(16).padStart(36, "0");
+    const byte10 = parseInt(hex.substring(20, 22), 16);
+    const bits = byte10.toString(2).padStart(8, "0");
+    return parseInt(bits.substring(5, 8), 2); // 0-7
+  } catch {
+    return 5; // custom fallback
+  }
+}
+
 function lookup(table: [number, number][], value: number): number {
   let best: number | null = null;
   for (const [k, v] of table) {
@@ -35,15 +65,16 @@ function buildSVG(shareCode: string): string | null {
   const ZOOM   = 4;
   const sc     = (v: number) => Math.round(v * ZOOM);
 
-  // CS2 piksel değerleri — lookup table
   const pixelLength    = lookup(LENGTH_MAP,    s.size      ?? 5);
   const pixelThickness = lookup(THICKNESS_MAP, s.thickness ?? 0.5);
   const pixelGap       = lookup(GAP_MAP,       s.gap       ?? 0);
-  const outlineT       = s.outline
-    ? lookup(THICKNESS_MAP, s.outlineThickness ?? 1)
+
+  // Outline: THICKNESS_MAP kullanma, doğrudan ince px değeri
+  // CS2'de outline 0.5-3 float, zoom'suz 1-2px yeterli
+  const ot = s.outline
+    ? Math.max(1, Math.round((s.outlineThickness ?? 1) * 1.5))
     : 0;
 
-  // C# DrawCrosshair formülü — birebir port
   const totalDistance     = pixelGap + 2;
   const adjustedLength    = pixelThickness === 1 ? pixelLength - 1 : pixelLength;
   const rightBottomOffset = pixelThickness > 1 && pixelThickness % 2 !== 0 ? 1 : 0;
@@ -51,24 +82,24 @@ function buildSVG(shareCode: string): string | null {
   const td = sc(totalDistance);
   const al = sc(adjustedLength);
   const pt = Math.max(1, sc(pixelThickness));
-  const rb = sc(rightBottomOffset);
-  const ot = sc(outlineT);
-  const ph = Math.floor(pt / 2); // thickness yarısı (yatay çizgi dikey offset)
+  const rb = rightBottomOffset; // ZOOM'suz
+  const ph = Math.floor(pt / 2);
 
   const cx = CANVAS / 2;
   const cy = CANVAS / 2;
 
   // Renk
   let r = 0, g = 255, b = 0;
-  switch (s.color) {
-    case 0: r=255; g= 82; b= 82; break;
-    case 1: r= 76; g=175; b= 80; break;
-    case 2: r=255; g=235; b= 59; break;
-    case 3: r= 33; g=150; b=243; break;
-    case 4: r=  0; g=255; b=255; break;
-    case 5: r=s.r??255; g=s.g??255; b=s.b??255; break;
-    default: r=0; g=255; b=0;
+  const colorIdx = decodeColorIndex(shareCode);
+  if (colorIdx >= 0 && colorIdx <= 4) {
+    [r, g, b] = CS2_PRESET_COLORS[colorIdx];
+  } else {
+    // Custom (colorIdx=5+)
+    r = s.r ?? 0;
+    g = s.g ?? 255;
+    b = s.b ?? 0;
   }
+
   const a255    = s.useAlpha ? (s.alpha ?? 255) : 255;
   const opacity = (a255 / 255).toFixed(3);
   const fill    = `rgb(${r},${g},${b})`;
@@ -79,34 +110,30 @@ function buildSVG(shareCode: string): string | null {
       ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" fill-opacity="${opacity}"/>`
       : "";
 
-  // Pillow draw.line([(x1,y), (x2,y)], width=pt) → rect(x1, y-ph, x2-x1, pt)
-  // Pillow draw.line([(x, y1), (x, y2)], width=pt) → rect(x-ph, y1, pt, y2-y1)
   function hLine(x1: number, x2: number, y: number): string {
-    const w = Math.abs(x2 - x1);
+    const w  = Math.abs(x2 - x1);
     const lx = Math.min(x1, x2);
-    let out = "";
+    let out  = "";
     if (ot > 0) out += rect(lx - ot, y - ph - ot, w + ot * 2, pt + ot * 2, black);
     out += rect(lx, y - ph, w, pt, fill);
     return out;
   }
 
   function vLine(x: number, y1: number, y2: number): string {
-    const h = Math.abs(y2 - y1);
+    const h  = Math.abs(y2 - y1);
     const ly = Math.min(y1, y2);
-    let out = "";
+    let out  = "";
     if (ot > 0) out += rect(x - ph - ot, ly - ot, pt + ot * 2, h + ot * 2, black);
     out += rect(x - ph, ly, pt, h, fill);
     return out;
   }
 
-  // 4 çizgi — C# DrawCrosshair sırası
   let lines = "";
-  lines += hLine(cx - td - al, cx - td,       cy);           // Left
-  lines += hLine(cx + td + rb, cx + td+al+rb, cy);           // Right
-  lines += vLine(cx,           cy - td - al,  cy - td);      // Top
-  lines += vLine(cx,           cy + td + rb,  cy+td+al+rb);  // Bottom
+  lines += hLine(cx - td - al, cx - td,       cy);
+  lines += hLine(cx + td + rb, cx + td+al+rb, cy);
+  lines += vLine(cx,           cy - td - al,  cy - td);
+  lines += vLine(cx,           cy + td + rb,  cy+td+al+rb);
 
-  // Center dot
   if (s.dot) {
     lines += rect(cx - ph, cy - ph, pt, pt, fill);
   }
@@ -138,7 +165,7 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=86400",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
         "Content-Length": pngBuffer.length.toString(),
       },
     });
