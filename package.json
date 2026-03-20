@@ -22,10 +22,14 @@
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
     "prisma": "^6.19.2",
+    "tailwindcss": "^4.2.2",
     "typescript": "5.9.3"
   }
 }

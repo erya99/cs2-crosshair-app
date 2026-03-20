@@ -2,48 +2,63 @@ import { NextRequest, NextResponse } from "next/server";
 import { decode } from "crosshair-code-generator";
 import sharp from "sharp";
 
+// ── CS2 GERÇEK LOOKUP TABLOLARI (CrosshairSettings.cs) ──────────────────────
+const LENGTH_MAP: [number, number][] = [
+  [0, 0], [0.3, 1], [0.7, 2], [1.2, 3], [1.6, 4], [2.1, 5], [2.5, 6], [2.9, 7],
+  [3.399, 8], [3.799, 9], [4.299, 10], [4.699, 11], [5.199, 12], [5.599, 13], [5.999, 14],
+  [6.499, 15], [6.899, 16], [7.399, 17], [7.799, 18], [8.299, 19], [8.699, 20], [9.199, 21],
+  [9.599, 22], [10.099, 23],
+];
+const THICKNESS_MAP: [number, number][] = [
+  [0, 1], [0.7, 2], [1.12, 3], [1.56, 4], [2.01, 5], [2.45, 6], [2.89, 7],
+];
+const GAP_MAP: [number, number][] = [
+  [-7.0, -3], [-5.9, -2], [-4.9, -1], [-3.0, 0], [-2.0, 1], [-1.0, 2], [-0.9, 2],
+  [-0.8, 2], [-0.7, 2], [-0.6, 2], [-0.5, 2], [-0.4, 2], [-0.3, 2], [-0.2, 2],
+  [-0.1, 2], [-0.05, 3], [0.00, 3], [1.0, 4], [2.0, 5], [3.0, 6], [4.0, 7],
+];
+
+function lookup(table: [number, number][], value: number): number {
+  let best: number | null = null;
+  for (const [k, v] of table) {
+    if (k <= value) best = v;
+    else break;
+  }
+  return best ?? 0;
+}
+
 function buildSVG(shareCode: string): string | null {
   const s = decode(shareCode);
   if (!s) return null;
 
   const CANVAS = 128;
+  const ZOOM   = 4;
+  const sc     = (v: number) => Math.round(v * ZOOM);
+
+  // CS2 piksel değerleri — lookup table
+  const pixelLength    = lookup(LENGTH_MAP,    s.size      ?? 5);
+  const pixelThickness = lookup(THICKNESS_MAP, s.thickness ?? 0.5);
+  const pixelGap       = lookup(GAP_MAP,       s.gap       ?? 0);
+  const outlineT       = s.outline
+    ? lookup(THICKNESS_MAP, s.outlineThickness ?? 1)
+    : 0;
+
+  // C# DrawCrosshair formülü — birebir port
+  const totalDistance     = pixelGap + 2;
+  const adjustedLength    = pixelThickness === 1 ? pixelLength - 1 : pixelLength;
+  const rightBottomOffset = pixelThickness > 1 && pixelThickness % 2 !== 0 ? 1 : 0;
+
+  const td = sc(totalDistance);
+  const al = sc(adjustedLength);
+  const pt = Math.max(1, sc(pixelThickness));
+  const rb = sc(rightBottomOffset);
+  const ot = sc(outlineT);
+  const ph = Math.floor(pt / 2); // thickness yarısı (yatay çizgi dikey offset)
+
   const cx = CANVAS / 2;
   const cy = CANVAS / 2;
 
-  // ── CS2 GERÇEK RENDER FORMÜLÜ ─────────────────────────────────────────
-  // CS2 motoru 768p base resolution kullanır, 1080p'ye ölçekler
-  // Her konsol değeri: piksel = round(value * 1080 / 768)
-  const BASE   = 768.0;
-  const SCREEN = 1080.0;
-  const cs2Scale = SCREEN / BASE; // 1.40625
-
-  const isLegacy = s.style === 5;
-
-  let t_cs2 = Math.ceil((s.thickness ?? 0) * cs2Scale);
-  if (isLegacy && t_cs2 === 0) t_cs2 = 1; // Legacy: min 1px
-
-  const s_cs2 = Math.max(1, Math.round((s.size ?? 5) * cs2Scale));
-  const g_cs2 = Math.round((s.gap ?? 0) * cs2Scale) + 4; // +4 CS2 dahili offset
-  const o_cs2 = s.outline
-    ? Math.max(1, Math.round((s.outlineThickness ?? 1) * cs2Scale))
-    : 0;
-
-  // ── VIEWER ZOOM ───────────────────────────────────────────────────────
-  // CS2 piksellerini 128x128 canvas için büyüt
-  // Thickness max 4px ile sınırlı — orantısız kalın görünmesin
-  const VIEWER_ZOOM = 6;
-  const THICK_MAX   = 4;
-
-  const t  = Math.max(1, Math.min(t_cs2 * VIEWER_ZOOM, THICK_MAX));
-  const sv = Math.max(1, s_cs2 * VIEWER_ZOOM);
-  const gs = g_cs2 * VIEWER_ZOOM;
-  const o  = o_cs2;
-
-  // Simetrik hizalama
-  const t_top = Math.floor(t / 2);
-  const t_bot = t - t_top;
-
-  // ── RENK ─────────────────────────────────────────────────────────────
+  // Renk
   let r = 0, g = 255, b = 0;
   switch (s.color) {
     case 0: r=255; g= 82; b= 82; break;
@@ -57,35 +72,49 @@ function buildSVG(shareCode: string): string | null {
   const a255    = s.useAlpha ? (s.alpha ?? 255) : 255;
   const opacity = (a255 / 255).toFixed(3);
   const fill    = `rgb(${r},${g},${b})`;
-  const outFill = `rgb(0,0,0)`;
+  const black   = `rgb(0,0,0)`;
 
-  // ── ÇİZGİ PARÇALARI ──────────────────────────────────────────────────
-  type Rect = { x: number; y: number; w: number; h: number };
-  const parts: Rect[] = [
-    { x: cx - gs - sv, y: cy - t_top, w: sv,   h: t   }, // Sol
-    { x: cx + gs,      y: cy - t_top, w: sv,   h: t   }, // Sağ
-    { x: cx - t_top,   y: cy + gs,    w: t,    h: sv  }, // Alt
-  ];
-  if (!(s.t || s.tStyle)) {
-    parts.push({ x: cx - t_top, y: cy - gs - sv, w: t, h: sv }); // Üst
+  const rect = (x: number, y: number, w: number, h: number, color: string) =>
+    w > 0 && h > 0
+      ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" fill-opacity="${opacity}"/>`
+      : "";
+
+  // Pillow draw.line([(x1,y), (x2,y)], width=pt) → rect(x1, y-ph, x2-x1, pt)
+  // Pillow draw.line([(x, y1), (x, y2)], width=pt) → rect(x-ph, y1, pt, y2-y1)
+  function hLine(x1: number, x2: number, y: number): string {
+    const w = Math.abs(x2 - x1);
+    const lx = Math.min(x1, x2);
+    let out = "";
+    if (ot > 0) out += rect(lx - ot, y - ph - ot, w + ot * 2, pt + ot * 2, black);
+    out += rect(lx, y - ph, w, pt, fill);
+    return out;
   }
+
+  function vLine(x: number, y1: number, y2: number): string {
+    const h = Math.abs(y2 - y1);
+    const ly = Math.min(y1, y2);
+    let out = "";
+    if (ot > 0) out += rect(x - ph - ot, ly - ot, pt + ot * 2, h + ot * 2, black);
+    out += rect(x - ph, ly, pt, h, fill);
+    return out;
+  }
+
+  // 4 çizgi — C# DrawCrosshair sırası
+  let lines = "";
+  lines += hLine(cx - td - al, cx - td,       cy);           // Left
+  lines += hLine(cx + td + rb, cx + td+al+rb, cy);           // Right
+  lines += vLine(cx,           cy - td - al,  cy - td);      // Top
+  lines += vLine(cx,           cy + td + rb,  cy+td+al+rb);  // Bottom
+
+  // Center dot
   if (s.dot) {
-    parts.push({ x: cx - t_top, y: cy - t_top, w: t, h: t }); // Dot
+    lines += rect(cx - ph, cy - ph, pt, pt, fill);
   }
-
-  const rect = (p: Rect, fc: string, expand = 0) =>
-    `<rect x="${p.x - expand}" y="${p.y - expand}" ` +
-    `width="${p.w + expand * 2}" height="${p.h + expand * 2}" ` +
-    `fill="${fc}" fill-opacity="${opacity}"/>`;
-
-  const outlineRects = o > 0 ? parts.map(p => rect(p, outFill, o)).join("") : "";
-  const mainRects    = parts.map(p => rect(p, fill)).join("");
 
   return (
     `<svg width="${CANVAS}" height="${CANVAS}" xmlns="http://www.w3.org/2000/svg">` +
     `<rect width="${CANVAS}" height="${CANVAS}" fill="#18181b"/>` +
-    outlineRects +
-    mainRects +
+    lines +
     `</svg>`
   );
 }
@@ -109,7 +138,6 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "image/png",
-        // Aynı kod = aynı görsel: tarayıcı 7 gün, CDN 30 gün cache'lesin
         "Cache-Control": "public, max-age=604800, s-maxage=2592000, stale-while-revalidate=86400",
         "Content-Length": pngBuffer.length.toString(),
       },
