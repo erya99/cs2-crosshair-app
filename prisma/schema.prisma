@@ -1,0 +1,103 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// 1. BÖLÜM: NEXTAUTH ZORUNLU GÜVENLİK TABLOLARI
+// (NextAuth'un çökmemesi için bu tablolar şarttır)
+// ------------------------------------------------------
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  steamId            String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ------------------------------------------------------
+// 2. BÖLÜM: CS2 CROSSHAIR UYGULAMAMIZIN TABLOLARI
+// (Senin kurgun ile NextAuth'un birleşimi)
+// ------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?   // Steam Kullanıcı Adı otomatik buraya gelir
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?   // Steam Avatarı otomatik buraya gelir
+  
+  // Bize özel Steam alanımız
+  steamId       String?   @unique
+  createdAt     DateTime  @default(now())
+  
+  // İlişkiler
+  accounts      Account[]
+  sessions      Session[]
+  crosshairs    Crosshair[] // Kullanıcının eklediği crosshair'ler
+  votes         Vote[]      // Kullanıcının verdiği oylar
+}
+
+model Crosshair {
+  id          String   @id @default(uuid())
+  shareCode   String   @unique
+  title       String
+  category    String   // 'pro' veya 'community' değerlerini alacak
+  voteCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  // İlişkiler
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  votes       Vote[]
+}
+
+model Vote {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+
+  // İlişkiler
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  crosshairId String
+  crosshair   Crosshair @relation(fields: [crosshairId], references: [id], onDelete: Cascade)
+
+  // KRİTİK NOKTA: Bir kullanıcı bir crosshair'e sadece 1 kez oy verebilir.
+  @@unique([userId, crosshairId])
+}
