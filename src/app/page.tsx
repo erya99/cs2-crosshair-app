@@ -12,6 +12,7 @@ type Crosshair = {
   voteCount: number;
   createdAt: string;
   userId: string;
+  voted: boolean;
   user: { name: string; image: string };
 };
 
@@ -153,8 +154,18 @@ export default function Home() {
     setSubmitting(false);
   };
 
+  const [toast, setToast] = useState("");
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  };
+
   const handleVote = async (id: string) => {
-    if (!session) return;
+    if (!session) {
+      showToast("Please sign in with Steam to vote.");
+      return;
+    }
     await fetch(`/api/crosshairs/${id}/vote`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -468,8 +479,10 @@ export default function Home() {
                             <span className="text-xs text-zinc-700">{timeAgo(cross.createdAt)}</span>
                           </div>
                         </div>
-                        <button onClick={() => handleVote(cross.id)} disabled={!session}
-                          className="flex-shrink-0 flex items-center gap-1 bg-white/5 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40 disabled:cursor-default px-2.5 py-1.5 rounded-lg text-zinc-400 transition-all ml-2">
+                        <button onClick={() => handleVote(cross.id)} 
+                          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all ml-2 disabled:opacity-40 disabled:cursor-default ${cross.voted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"}`}>
+
+
                           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
                           </svg>
@@ -538,6 +551,13 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 border border-white/10 text-white text-sm px-5 py-3 rounded-xl shadow-xl">
+          {toast}
+        </div>
+      )}
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-white/5 py-8">

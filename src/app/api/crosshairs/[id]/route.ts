@@ -5,16 +5,17 @@ import { getAuthOptions } from "../../../../lib/auth";
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } }
+  ctx: any
 ) {
   try {
+    const { id } = await ctx.params;
     const session = await getServerSession(getAuthOptions());
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const crosshair = await prisma.crosshair.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!crosshair) {
@@ -29,7 +30,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await prisma.crosshair.delete({ where: { id: params.id } });
+    await prisma.crosshair.delete({ where: { id } });
     return NextResponse.json({ message: "Deleted" });
   } catch {
     return NextResponse.json({ error: "Error deleting" }, { status: 500 });

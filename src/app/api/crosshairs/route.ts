@@ -1,18 +1,37 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "../../../lib/auth";
 import { validateShareCode, validateTitle, validateCategory } from "../../../lib/validate";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(getAuthOptions());
+    const userId = (session?.user as any)?.id ?? null;
+
     const crosshairs = await prisma.crosshair.findMany({
       include: {
         user: { select: { name: true, image: true } },
       },
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(crosshairs);
+
+    // Kullanıcının oylarını getir
+    let votedIds: Set<string> = new Set();
+    if (userId) {
+      const votes = await prisma.vote.findMany({
+        where: { userId },
+        select: { crosshairId: true },
+      });
+      votedIds = new Set(votes.map((v) => v.crosshairId));
+    }
+
+    const result = crosshairs.map((c) => ({
+      ...c,
+      voted: votedIds.has(c.id),
+    }));
+
+    return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: "Error fetching" }, { status: 500 });
   }
@@ -28,7 +47,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { title, shareCode, category } = body;
 
-    // Input validation
     const titleErr    = validateTitle(title ?? "");
     const codeErr     = validateShareCode(shareCode ?? "");
     const categoryErr = validateCategory(category ?? "community");
@@ -41,7 +59,6 @@ export async function POST(req: Request) {
     const role    = (session.user as any).role ?? "USER";
     const isAdmin = role === "ADMIN";
 
-    // Only admins can add "pro" category
     if (category === "pro" && !isAdmin) {
       return NextResponse.json(
         { error: "Only admins can add pro crosshairs." },
@@ -49,7 +66,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Regular users: max 3 crosshairs
     if (!isAdmin) {
       const count = await prisma.crosshair.count({ where: { userId } });
       if (count >= 3) {

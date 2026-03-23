@@ -24,9 +24,16 @@ export const metadata: Metadata = {
     "cs2 aim",
     "pro player crosshair cs2",
   ],
-  metadataBase: new URL("https://cs2crosshub.pro"), // ← kendi domainine göre değiştir
+  metadataBase: new URL("https://cs2crosshub.pro"),
   alternates: {
     canonical: "/",
+  },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
     title: "CS2 Crosshair Codes — CS2CrossHub",
@@ -64,7 +71,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* JSON-LD Structured Data — Google bu bilgiyi doğrudan okur */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

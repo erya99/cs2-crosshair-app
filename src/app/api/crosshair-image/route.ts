@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { decode } from "crosshair-code-generator";
 import sharp from "sharp";
 
-// ── CS2 GERÇEK LOOKUP TABLOLARI (CrosshairSettings.cs) ──────────────────────
 const LENGTH_MAP: [number, number][] = [
   [0, 0], [0.3, 1], [0.7, 2], [1.2, 3], [1.6, 4], [2.1, 5], [2.5, 6], [2.9, 7],
   [3.399, 8], [3.799, 9], [4.299, 10], [4.699, 11], [5.199, 12], [5.599, 13], [5.999, 14],
@@ -17,19 +16,15 @@ const GAP_MAP: [number, number][] = [
   [-0.8, 2], [-0.7, 2], [-0.6, 2], [-0.5, 2], [-0.4, 2], [-0.3, 2], [-0.2, 2],
   [-0.1, 2], [-0.05, 3], [0.00, 3], [1.0, 4], [2.0, 5], [3.0, 6], [4.0, 7],
 ];
-
-// CS2 preset renkleri (0-4 index)
 const CS2_PRESET_COLORS: [number, number, number][] = [
-  [255,   0,   0],  // 0: Kırmızı
-  [  0, 255,   0],  // 1: Yeşil
-  [255, 255,   0],  // 2: Sarı
-  [  0,   0, 255],  // 3: Mavi
-  [  0, 255, 255],  // 4: Cyan
+  [255, 0, 0],
+  [0, 255, 0],
+  [255, 255, 0],
+  [0, 0, 255],
+  [0, 255, 255],
 ];
-
 const DICTIONARY = "ABCDEFGHJKLMNOPQRSTUVWXYZabcdefhijkmnopqrstuvwxyz23456789";
 
-// JS kütüphanesi color'u NaN döndürüyor (padding bug) — kendimiz decode ediyoruz
 function decodeColorIndex(shareCode: string): number {
   try {
     const code = shareCode.replace(/CSGO|-/g, "");
@@ -42,9 +37,9 @@ function decodeColorIndex(shareCode: string): number {
     const hex = big.toString(16).padStart(36, "0");
     const byte10 = parseInt(hex.substring(20, 22), 16);
     const bits = byte10.toString(2).padStart(8, "0");
-    return parseInt(bits.substring(5, 8), 2); // 0-7
+    return parseInt(bits.substring(5, 8), 2);
   } catch {
-    return 5; // custom fallback
+    return 5;
   }
 }
 
@@ -62,87 +57,72 @@ function buildSVG(shareCode: string): string | null {
   if (!s) return null;
 
   const CANVAS = 128;
-  const ZOOM   = 4;
-  const sc     = (v: number) => Math.round(v * ZOOM);
+  const ZOOM = 4;
+  const sc = (v: number) => Math.round(v * ZOOM);
 
-  const pixelLength    = lookup(LENGTH_MAP,    s.size      ?? 5);
+  const pixelLength = lookup(LENGTH_MAP, s.size ?? 5);
   const pixelThickness = lookup(THICKNESS_MAP, s.thickness ?? 0.5);
-  const pixelGap       = lookup(GAP_MAP,       s.gap       ?? 0);
+  const pixelGap = lookup(GAP_MAP, s.gap ?? 0);
+  const ot = s.outline ? Math.max(1, Math.round((s.outlineThickness ?? 1) * 1.5)) : 0;
 
-  // Outline: THICKNESS_MAP kullanma, doğrudan ince px değeri
-  // CS2'de outline 0.5-3 float, zoom'suz 1-2px yeterli
-  const ot = s.outline
-    ? Math.max(1, Math.round((s.outlineThickness ?? 1) * 1.5))
-    : 0;
-
-  const totalDistance     = pixelGap + 2;
-  const adjustedLength    = pixelThickness === 1 ? pixelLength - 1 : pixelLength;
-  const rightBottomOffset = pixelThickness > 1 && pixelThickness % 2 !== 0 ? 1 : 0;
-
-  const td = sc(totalDistance);
-  const al = sc(adjustedLength);
+  const td = sc(pixelGap + 2);
+  const al = sc(pixelThickness === 1 ? pixelLength - 1 : pixelLength);
   const pt = Math.max(1, sc(pixelThickness));
-  const rb = rightBottomOffset; // ZOOM'suz
+  const rb = pixelThickness > 1 && pixelThickness % 2 !== 0 ? 1 : 0;
   const ph = Math.floor(pt / 2);
-
   const cx = CANVAS / 2;
   const cy = CANVAS / 2;
 
-  // Renk
   let r = 0, g = 255, b = 0;
   const colorIdx = decodeColorIndex(shareCode);
   if (colorIdx >= 0 && colorIdx <= 4) {
     [r, g, b] = CS2_PRESET_COLORS[colorIdx];
   } else {
-    // Custom (colorIdx=5+)
     r = s.r ?? 0;
     g = s.g ?? 255;
     b = s.b ?? 0;
   }
 
-  const a255    = s.useAlpha ? (s.alpha ?? 255) : 255;
-  const opacity = (a255 / 255).toFixed(3);
-  const fill    = `rgb(${r},${g},${b})`;
-  const black   = `rgb(0,0,0)`;
+  const a255 = s.useAlpha ? (s.alpha ?? 255) : 255;
+  const op = (a255 / 255).toFixed(3);
 
-  const rect = (x: number, y: number, w: number, h: number, color: string) =>
-    w > 0 && h > 0
-      ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}" fill-opacity="${opacity}"/>`
-      : "";
+  const R = (x: number, y: number, w: number, h: number, c: string): string => {
+    if (w <= 0 || h <= 0) return "";
+    return (
+      '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h +
+      '" fill="' + c + '" fill-opacity="' + op + '"/>'
+    );
+  };
 
-  function hLine(x1: number, x2: number, y: number): string {
-    const w  = Math.abs(x2 - x1);
+  const fill = "rgb(" + r + "," + g + "," + b + ")";
+  const black = "rgb(0,0,0)";
+
+  const hLine = (x1: number, x2: number, y: number): string => {
+    const w = Math.abs(x2 - x1);
     const lx = Math.min(x1, x2);
-    let out  = "";
-    if (ot > 0) out += rect(lx - ot, y - ph - ot, w + ot * 2, pt + ot * 2, black);
-    out += rect(lx, y - ph, w, pt, fill);
-    return out;
-  }
+    return (ot > 0 ? R(lx - ot, y - ph - ot, w + ot * 2, pt + ot * 2, black) : "") +
+      R(lx, y - ph, w, pt, fill);
+  };
 
-  function vLine(x: number, y1: number, y2: number): string {
-    const h  = Math.abs(y2 - y1);
+  const vLine = (x: number, y1: number, y2: number): string => {
+    const h = Math.abs(y2 - y1);
     const ly = Math.min(y1, y2);
-    let out  = "";
-    if (ot > 0) out += rect(x - ph - ot, ly - ot, pt + ot * 2, h + ot * 2, black);
-    out += rect(x - ph, ly, pt, h, fill);
-    return out;
-  }
+    return (ot > 0 ? R(x - ph - ot, ly - ot, pt + ot * 2, h + ot * 2, black) : "") +
+      R(x - ph, ly, pt, h, fill);
+  };
 
   let lines = "";
-  lines += hLine(cx - td - al, cx - td,       cy);
-  lines += hLine(cx + td + rb, cx + td+al+rb, cy);
-  lines += vLine(cx,           cy - td - al,  cy - td);
-  lines += vLine(cx,           cy + td + rb,  cy+td+al+rb);
-
-  if (s.dot) {
-    lines += rect(cx - ph, cy - ph, pt, pt, fill);
-  }
+  lines += hLine(cx - td - al, cx - td, cy);
+  lines += hLine(cx + td + rb, cx + td + al + rb, cy);
+  lines += vLine(cx, cy - td - al, cy - td);
+  lines += vLine(cx, cy + td + rb, cy + td + al + rb);
+  if (s.dot) lines += R(cx - ph, cy - ph, pt, pt, fill);
 
   return (
-    `<svg width="${CANVAS}" height="${CANVAS}" xmlns="http://www.w3.org/2000/svg">` +
-    `<rect width="${CANVAS}" height="${CANVAS}" fill="#18181b"/>` +
+    '<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect width="128" height="128" fill="#18181b"/>' +
     lines +
-    `</svg>`
+    "</svg>"
   );
 }
 
@@ -169,7 +149,7 @@ export async function GET(req: NextRequest) {
         "Content-Length": pngBuffer.length.toString(),
       },
     });
-  } catch {
-    return new NextResponse("Render error", { status: 500 });
+  } catch (e) {
+    return new NextResponse(String(e), { status: 500 });
   }
 }
