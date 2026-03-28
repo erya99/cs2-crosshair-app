@@ -3,6 +3,7 @@
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import CrosshairPreview from "../components/CrosshairPreview";
+import Link from "next/link"; // Link bileşenini ekledik
 
 type Crosshair = {
   id: string;
@@ -95,14 +96,12 @@ export default function Home() {
 
   useEffect(() => { fetchCrosshairs(); }, [fetchCrosshairs]);
 
-  // Reset page when filters change
   useEffect(() => { setPage(1); }, [tab, search, sortBy]);
 
   useEffect(() => {
     if (showForm) formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [showForm]);
 
-  // Filter + search + sort
   const filtered = crosshairs
     .filter(c => tab === "all" ? true : c.category === tab)
     .filter(c => {
@@ -120,7 +119,6 @@ export default function Home() {
         : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-  // Pagination
   const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated   = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -186,13 +184,10 @@ export default function Home() {
       {/* ── NAVBAR ── */}
       <header className="fixed top-0 inset-x-0 z-50 border-b border-white/5 bg-[#080809]/90 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-
-          {/* Logo — links to home */}
-          <a href="/" className="font-black text-white tracking-tight text-base shrink-0 hover:opacity-80 transition">
+          <Link href="/" className="font-black text-white tracking-tight text-base shrink-0 hover:opacity-80 transition">
             CS2CROSS<span className="text-red-500">HUB</span>
-          </a>
+          </Link>
 
-          {/* Desktop tabs */}
           <nav className="hidden md:flex items-center gap-1">
             {(["all","pro","community"] as Tab[]).map(t => (
               <button key={t} onClick={() => setTab(t)}
@@ -204,7 +199,6 @@ export default function Home() {
             ))}
           </nav>
 
-          {/* Right side */}
           <div className="flex items-center gap-2 sm:gap-3">
             {session ? (
               <>
@@ -240,7 +234,6 @@ export default function Home() {
               </button>
             )}
 
-            {/* Mobile hamburger */}
             <button onClick={() => setMobileNavOpen(o => !o)}
               className="md:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,7 +245,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Mobile nav dropdown */}
         {mobileNavOpen && (
           <div className="md:hidden border-t border-white/5 bg-[#080809] px-4 py-3 flex flex-col gap-1">
             {(["all","pro","community"] as Tab[]).map(t => (
@@ -350,8 +342,6 @@ export default function Home() {
         {/* ── SEARCH + FILTER BAR ── */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-4">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-
-            {/* Search */}
             <div className="relative flex-1 max-w-md">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
                 <SearchIcon />
@@ -372,10 +362,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Right controls */}
             <div className="flex items-center gap-2 flex-wrap">
-
-              {/* Category tabs */}
               <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
                 {(["all","pro","community"] as Tab[]).map(t => (
                   <button key={t} onClick={() => setTab(t)}
@@ -387,7 +374,6 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* Sort */}
               <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
                 <button onClick={() => setSortBy("votes")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -411,7 +397,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Search result count */}
           {search && (
             <p className="text-xs text-zinc-600 mt-3">
               {filtered.length} result{filtered.length !== 1 ? "s" : ""} for &ldquo;{search}&rdquo;
@@ -443,8 +428,6 @@ export default function Home() {
                 {paginated.map((cross, i) => (
                   <article key={cross.id}
                     className="group bg-[#0f0f11] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.14] hover:-translate-y-0.5 transition-all duration-200">
-
-                    {/* Preview — sabit yükseklik, crosshair asla scale edilmez */}
                     <div className="relative bg-[#070708] h-40 flex items-center justify-center border-b border-white/[0.06] overflow-hidden">
                       <CrosshairPreview shareCode={cross.shareCode} size={128} />
                       <div className="absolute top-3 left-3">
@@ -467,7 +450,6 @@ export default function Home() {
                       )}
                     </div>
 
-                    {/* Body */}
                     <div className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div className="min-w-0">
@@ -481,8 +463,6 @@ export default function Home() {
                         </div>
                         <button onClick={() => handleVote(cross.id)} 
                           className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all ml-2 disabled:opacity-40 disabled:cursor-default ${cross.voted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"}`}>
-
-
                           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
                           </svg>
@@ -516,6 +496,7 @@ export default function Home() {
                         if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push("…");
                         acc.push(p);
                         return acc;
+                        return acc;
                       }, [])
                       .map((p, i) =>
                         p === "…" ? (
@@ -540,16 +521,41 @@ export default function Home() {
                   </button>
                 </div>
               )}
-
-              {/* Page info */}
-              {totalPages > 1 && (
-                <p className="text-center text-xs text-zinc-700 mt-3">
-                  Page {page} of {totalPages} · {filtered.length} crosshairs
-                </p>
-              )}
             </>
           )}
         </section>
+        
+        {/* ── SEO & FAQ SECTION ── */}
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 border-t border-white/5 mt-12">
+          <h2 className="text-2xl font-bold text-white mb-8">Frequently Asked Questions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-400">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2">How do I use a CS2 crosshair code?</h3>
+              <p className="text-sm leading-relaxed">
+                To use a crosshair code in Counter-Strike 2, simply click the "Copy" button on any crosshair profile on our site. Open your CS2 settings, navigate to Game {'>'} Crosshair, and click on "Share or Import". Paste the copied code into the text box and click "Import". Your new crosshair will be applied instantly.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2">Are these crosshairs used by CS2 pro players?</h3>
+              <p className="text-sm leading-relaxed">
+                Yes! CS2CrossHub regularly updates its database with the exact crosshair settings used by top CS2 esports professionals. Whether you are looking for s1mple's dot crosshair or m0NESY's dynamic setup, you can find and preview them live before importing them into your game.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2">Why is choosing the right crosshair important in CS2?</h3>
+              <p className="text-sm leading-relaxed">
+                A properly configured crosshair improves your visibility, spray control, and overall aim accuracy. Depending on your screen resolution, aspect ratio (like 4:3 stretched), and personal preference, finding the perfect gap, thickness, and color can significantly impact your matchmaking rank and Premier rating.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2">Can I share my own crosshair?</h3>
+              <p className="text-sm leading-relaxed">
+                Absolutely. CS2CrossHub is built for the community. You can easily export your own crosshair code from the CS2 settings menu and submit it to our platform. Sharing your unique crosshair helps other players discover new playstyles and aim techniques.
+              </p>
+            </div>
+          </div>
+        </section>
+
       </main>
 
       {/* ── TOAST ── */}
@@ -559,12 +565,34 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── FOOTER ── */}
-      <footer className="border-t border-white/5 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-zinc-700">
-          <span>CS2CROSS<span className="text-red-600">HUB</span> — Community CS2 Crosshair Library</span>
-          <span className="text-center text-zinc-600 italic">Previews are approximate — some crosshairs may not reflect exact in-game appearance. Test in-game for accuracy.</span>
-          <span>Not affiliated with Valve Corporation</span>
+      {/* ── NEW PROFESSIONAL FOOTER ── */}
+      <footer className="border-t border-white/5 bg-[#0a0a0c] py-16">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-10">
+            <div className="space-y-4 text-center md:text-left">
+              <Link href="/" className="text-2xl font-black tracking-tighter text-white">
+                CS2CROSS<span className="text-red-500">HUB</span>
+              </Link>
+              <p className="text-zinc-500 text-sm max-w-xs leading-relaxed">
+                The ultimate community-driven library for Counter-Strike 2 crosshairs. Discover, share, and improve your aim.
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap justify-center gap-x-10 gap-y-4 text-sm font-bold text-zinc-400">
+              <Link href="/privacy" className="hover:text-red-500 transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="hover:text-red-500 transition-colors">Terms of Service</Link>
+              <Link href="/contact" className="hover:text-red-500 transition-colors">Contact</Link>
+            </div>
+          </div>
+          
+          <div className="mt-12 pt-8 border-t border-white/[0.03] flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-[11px] text-zinc-600 uppercase tracking-widest font-medium">
+              © 2026 CS2CrossHub. PROUDLY POWERED BY THE COMMUNITY.
+            </p>
+            <p className="text-[11px] text-zinc-700 italic max-w-md text-center md:text-right">
+              CS2CrossHub is not affiliated with Valve Corporation or Counter-Strike 2. All game assets belong to their respective owners.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
