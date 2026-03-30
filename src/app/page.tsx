@@ -3,13 +3,14 @@
 import { signIn, signOut, useSession } from "next-auth/react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import CrosshairPreview from "../components/CrosshairPreview";
-import Link from "next/link"; // Link bileşenini ekledik
+import Link from "next/link";
 
 type Crosshair = {
   id: string;
   title: string;
   shareCode: string;
   category: string;
+  resolution: string; // YENİ: Çözünürlük alanı
   voteCount: number;
   createdAt: string;
   userId: string;
@@ -79,6 +80,7 @@ export default function Home() {
   const [title, setTitle]           = useState("");
   const [shareCode, setShareCode]   = useState("");
   const [category, setCategory]     = useState("community");
+  const [resolution, setResolution] = useState("16:9"); // YENİ: Başlangıç state'i
 
   // Mobile nav
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -144,11 +146,18 @@ export default function Home() {
     const res  = await fetch("/api/crosshairs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, shareCode, category }),
+      body: JSON.stringify({ title, shareCode, category, resolution }), // YENİ: Resolution body'e eklendi
     });
     const data = await res.json();
     if (!res.ok) { setFormError(data.error ?? "Something went wrong."); }
-    else { setTitle(""); setShareCode(""); setCategory("community"); setShowForm(false); fetchCrosshairs(); }
+    else { 
+      setTitle(""); 
+      setShareCode(""); 
+      setCategory("community"); 
+      setResolution("16:9"); // YENİ: Başarıyla eklenince sıfırla
+      setShowForm(false); 
+      fetchCrosshairs(); 
+    }
     setSubmitting(false);
   };
 
@@ -298,7 +307,7 @@ export default function Home() {
               <div className="max-w-2xl">
                 <h2 className="text-xl font-bold text-white mb-6">Share a Crosshair</h2>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4"> {/* YENİ: 3 Kolonlu Yapı */}
                     <div>
                       <label className="text-xs text-zinc-500 uppercase tracking-widest font-bold block mb-2">Title / Player Name</label>
                       <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. NiKo 2025"
@@ -312,6 +321,16 @@ export default function Home() {
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 transition-all">
                         <option value="community">Community</option>
                         {isAdmin && <option value="pro">Pro Player</option>}
+                      </select>
+                    </div>
+                    {/* YENİ: Çözünürlük Seçici */}
+                    <div>
+                      <label className="text-xs text-zinc-500 uppercase tracking-widest font-bold block mb-2">Aspect Ratio</label>
+                      <select value={resolution} onChange={e => setResolution(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 transition-all">
+                        <option value="16:9">16:9 (Native)</option>
+                        <option value="4:3">4:3 (Stretched)</option>
+                        <option value="16:10">16:10</option>
                       </select>
                     </div>
                   </div>
@@ -430,7 +449,9 @@ export default function Home() {
                     className="group bg-[#0f0f11] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.14] hover:-translate-y-0.5 transition-all duration-200">
                     <div className="relative bg-[#070708] h-40 flex items-center justify-center border-b border-white/[0.06] overflow-hidden">
                       <CrosshairPreview shareCode={cross.shareCode} size={128} />
-                      <div className="absolute top-3 left-3">
+                      
+                      {/* YENİ: Kategori ve Çözünürlük Etiketleri Yanyana */}
+                      <div className="absolute top-3 left-3 flex gap-1.5">
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
                           cross.category === "pro"
                             ? "bg-amber-400/10 text-amber-400 border border-amber-400/20"
@@ -438,7 +459,11 @@ export default function Home() {
                         }`}>
                           {cross.category}
                         </span>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider bg-white/10 text-zinc-300 border border-white/20 backdrop-blur-sm">
+                          {cross.resolution || "16:9"}
+                        </span>
                       </div>
+
                       {canDelete(cross) && (
                         <button onClick={() => handleDelete(cross.id)}
                           className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
@@ -495,7 +520,6 @@ export default function Home() {
                       .reduce<(number | "…")[]>((acc, p, idx, arr) => {
                         if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push("…");
                         acc.push(p);
-                        return acc;
                         return acc;
                       }, [])
                       .map((p, i) =>

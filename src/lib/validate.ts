@@ -24,3 +24,11 @@ export function validateCategory(category: string): string | null {
   if (!["community", "pro"].includes(category)) return "Invalid category.";
   return null;
 }
+
+// YENİ EKLENEN ÇÖZÜNÜRLÜK KONTROLÜ
+export function validateResolution(resolution: string): string | null {
+  if (!["16:9", "16:10", "4:3"].includes(resolution)) {
+    return "Invalid resolution format.";
+  }
+  return null;
+}

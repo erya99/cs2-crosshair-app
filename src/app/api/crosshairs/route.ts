@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "../../../lib/auth";
-import { validateShareCode, validateTitle, validateCategory } from "../../../lib/validate";
+import { validateShareCode, validateTitle, validateCategory, validateResolution } from "../../../lib/validate";
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,15 +45,17 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { title, shareCode, category } = body;
+    const { title, shareCode, category, resolution } = body;
 
     const titleErr    = validateTitle(title ?? "");
     const codeErr     = validateShareCode(shareCode ?? "");
     const categoryErr = validateCategory(category ?? "community");
+    const resErr      = validateResolution(resolution ?? "16:9");
 
     if (titleErr)    return NextResponse.json({ error: titleErr },    { status: 400 });
     if (codeErr)     return NextResponse.json({ error: codeErr },     { status: 400 });
     if (categoryErr) return NextResponse.json({ error: categoryErr }, { status: 400 });
+    if (resErr)      return NextResponse.json({ error: resErr },      { status: 400 });
 
     const userId  = session.user.id;
     const role    = (session.user as any).role ?? "USER";
@@ -78,9 +80,10 @@ export async function POST(req: Request) {
 
     const newCrosshair = await prisma.crosshair.create({
       data: {
-        title:     title.trim(),
-        shareCode: shareCode.trim(),
-        category:  category || "community",
+        title:      title.trim(),
+        shareCode:  shareCode.trim(),
+        category:   category || "community",
+        resolution: resolution || "16:9",
         userId,
       },
     });
