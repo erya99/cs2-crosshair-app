@@ -10,7 +10,7 @@ type Crosshair = {
   title: string;
   shareCode: string;
   category: string;
-  resolution: string; // YENİ: Çözünürlük alanı
+  resolution: string;
   voteCount: number;
   createdAt: string;
   userId: string;
@@ -68,10 +68,11 @@ export default function Home() {
   const [loading, setLoading]       = useState(true);
 
   // Filters
-  const [tab, setTab]         = useState<Tab>("all");
-  const [search, setSearch]   = useState("");
-  const [sortBy, setSortBy]   = useState<SortBy>("votes");
-  const [page, setPage]       = useState(1);
+  const [tab, setTab]               = useState<Tab>("all");
+  const [resFilter, setResFilter]   = useState<string>("all"); // YENİ: Çözünürlük Filtresi
+  const [search, setSearch]         = useState("");
+  const [sortBy, setSortBy]         = useState<SortBy>("votes");
+  const [page, setPage]             = useState(1);
 
   // Form
   const [showForm, setShowForm]     = useState(false);
@@ -80,7 +81,7 @@ export default function Home() {
   const [title, setTitle]           = useState("");
   const [shareCode, setShareCode]   = useState("");
   const [category, setCategory]     = useState("community");
-  const [resolution, setResolution] = useState("16:9"); // YENİ: Başlangıç state'i
+  const [resolution, setResolution] = useState("16:9");
 
   // Mobile nav
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -98,14 +99,17 @@ export default function Home() {
 
   useEffect(() => { fetchCrosshairs(); }, [fetchCrosshairs]);
 
-  useEffect(() => { setPage(1); }, [tab, search, sortBy]);
+  // Filtrelerden biri değiştiğinde sayfayı 1'e al (resFilter eklendi)
+  useEffect(() => { setPage(1); }, [tab, search, sortBy, resFilter]);
 
   useEffect(() => {
     if (showForm) formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [showForm]);
 
+  // Çift filtreleme mantığı (Tab + Resolution)
   const filtered = crosshairs
     .filter(c => tab === "all" ? true : c.category === tab)
+    .filter(c => resFilter === "all" ? true : (c.resolution || "16:9") === resFilter)
     .filter(c => {
       if (!search.trim()) return true;
       const q = search.toLowerCase();
@@ -146,7 +150,7 @@ export default function Home() {
     const res  = await fetch("/api/crosshairs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, shareCode, category, resolution }), // YENİ: Resolution body'e eklendi
+      body: JSON.stringify({ title, shareCode, category, resolution }),
     });
     const data = await res.json();
     if (!res.ok) { setFormError(data.error ?? "Something went wrong."); }
@@ -154,7 +158,7 @@ export default function Home() {
       setTitle(""); 
       setShareCode(""); 
       setCategory("community"); 
-      setResolution("16:9"); // YENİ: Başarıyla eklenince sıfırla
+      setResolution("16:9"); 
       setShowForm(false); 
       fetchCrosshairs(); 
     }
@@ -264,10 +268,22 @@ export default function Home() {
                 {t === "all" ? `All (${counts.all})` : t === "pro" ? `Pro (${counts.pro})` : `Community (${counts.community})`}
               </button>
             ))}
-            {session && (
-              <button onClick={() => signOut()} className="w-full text-left px-3 py-2 text-sm text-red-400 mt-1">
-                Sign out
+            <div className="border-t border-white/5 my-1" />
+            {(["all", "4:3", "16:9", "16:10"]).map(r => (
+              <button key={r} onClick={() => { setResFilter(r); setMobileNavOpen(false); }}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium uppercase transition-all ${
+                  resFilter === r ? "bg-white/10 text-white" : "text-zinc-500"
+                }`}>
+                {r === "all" ? "Any Resolution" : r}
               </button>
+            ))}
+            {session && (
+              <>
+                <div className="border-t border-white/5 my-1" />
+                <button onClick={() => signOut()} className="w-full text-left px-3 py-2 text-sm text-red-400 mt-1">
+                  Sign out
+                </button>
+              </>
             )}
           </div>
         )}
@@ -307,7 +323,7 @@ export default function Home() {
               <div className="max-w-2xl">
                 <h2 className="text-xl font-bold text-white mb-6">Share a Crosshair</h2>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4"> {/* YENİ: 3 Kolonlu Yapı */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="text-xs text-zinc-500 uppercase tracking-widest font-bold block mb-2">Title / Player Name</label>
                       <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. NiKo 2025"
@@ -319,18 +335,19 @@ export default function Home() {
                       </label>
                       <select value={category} onChange={e => setCategory(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 transition-all">
-                        <option value="community">Community</option>
-                        {isAdmin && <option value="pro">Pro Player</option>}
+                        {/* option etiketlerine bg eklendi */}
+                        <option value="community" className="bg-[#0c0c0e] text-white">Community</option>
+                        {isAdmin && <option value="pro" className="bg-[#0c0c0e] text-white">Pro Player</option>}
                       </select>
                     </div>
-                    {/* YENİ: Çözünürlük Seçici */}
                     <div>
                       <label className="text-xs text-zinc-500 uppercase tracking-widest font-bold block mb-2">Aspect Ratio</label>
                       <select value={resolution} onChange={e => setResolution(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 transition-all">
-                        <option value="16:9">16:9 (Native)</option>
-                        <option value="4:3">4:3 (Stretched)</option>
-                        <option value="16:10">16:10</option>
+                        {/* option etiketlerine bg eklendi */}
+                        <option value="16:9" className="bg-[#0c0c0e] text-white">16:9 (Native)</option>
+                        <option value="4:3" className="bg-[#0c0c0e] text-white">4:3 (Stretched)</option>
+                        <option value="16:10" className="bg-[#0c0c0e] text-white">16:10</option>
                       </select>
                     </div>
                   </div>
@@ -382,6 +399,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {/* 1. Kategori Filtresi */}
               <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
                 {(["all","pro","community"] as Tab[]).map(t => (
                   <button key={t} onClick={() => setTab(t)}
@@ -393,6 +411,19 @@ export default function Home() {
                 ))}
               </div>
 
+              {/* 2. Çözünürlük Filtresi (YENİ) */}
+              <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
+                {(["all", "4:3", "16:9", "16:10"]).map(r => (
+                  <button key={r} onClick={() => setResFilter(r)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-all ${
+                      resFilter === r ? "bg-white text-black" : "text-zinc-500 hover:text-white"
+                    }`}>
+                    {r === "all" ? "Any Res" : r}
+                  </button>
+                ))}
+              </div>
+
+              {/* 3. Sıralama Filtresi */}
               <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
                 <button onClick={() => setSortBy("votes")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -450,7 +481,6 @@ export default function Home() {
                     <div className="relative bg-[#070708] h-40 flex items-center justify-center border-b border-white/[0.06] overflow-hidden">
                       <CrosshairPreview shareCode={cross.shareCode} size={128} />
                       
-                      {/* YENİ: Kategori ve Çözünürlük Etiketleri Yanyana */}
                       <div className="absolute top-3 left-3 flex gap-1.5">
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
                           cross.category === "pro"
@@ -589,7 +619,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── NEW PROFESSIONAL FOOTER ── */}
+      {/* ── FOOTER ── */}
       <footer className="border-t border-white/5 bg-[#0a0a0c] py-16">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-10">
