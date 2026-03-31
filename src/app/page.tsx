@@ -24,7 +24,9 @@ type Tab    = "all" | "pro" | "community";
 const PAGE_SIZE = 12;
 
 function timeAgo(dateStr: string) {
+  if (!dateStr) return "just now";
   const diff  = Date.now() - new Date(dateStr).getTime();
+  if (isNaN(diff)) return "recently";
   const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days  = Math.floor(diff / 86400000);
@@ -39,9 +41,11 @@ function CopyButton({ code }: { code: string }) {
   return (
     <button
       onClick={() => {
-        navigator.clipboard.writeText(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (typeof window !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(code);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
       }}
       className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
         copied ? "bg-emerald-500 text-white" : "bg-white text-black hover:bg-zinc-200"
@@ -69,7 +73,7 @@ export default function Home() {
 
   // Filters
   const [tab, setTab]               = useState<Tab>("all");
-  const [resFilter, setResFilter]   = useState<string>("all"); // YENİ: Çözünürlük Filtresi
+  const [resFilter, setResFilter]   = useState<string>("all");
   const [search, setSearch]         = useState("");
   const [sortBy, setSortBy]         = useState<SortBy>("votes");
   const [page, setPage]             = useState(1);
@@ -91,22 +95,31 @@ export default function Home() {
   const isAdmin = role === "ADMIN";
 
   const fetchCrosshairs = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch("/api/crosshairs");
-    if (res.ok) setCrosshairs(await res.json());
-    setLoading(false);
+    try {
+      setLoading(true);
+      const res = await fetch("/api/crosshairs");
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setCrosshairs(data);
+      }
+    } catch (error) {
+      console.error("Error fetching crosshairs:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchCrosshairs(); }, [fetchCrosshairs]);
 
-  // Filtrelerden biri değiştiğinde sayfayı 1'e al (resFilter eklendi)
   useEffect(() => { setPage(1); }, [tab, search, sortBy, resFilter]);
 
   useEffect(() => {
-    if (showForm) formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (showForm && formRef.current) {
+      formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, [showForm]);
 
-  // Çift filtreleme mantığı (Tab + Resolution)
   const filtered = crosshairs
     .filter(c => tab === "all" ? true : c.category === tab)
     .filter(c => resFilter === "all" ? true : (c.resolution || "16:9") === resFilter)
@@ -114,15 +127,15 @@ export default function Home() {
       if (!search.trim()) return true;
       const q = search.toLowerCase();
       return (
-        c.title.toLowerCase().includes(q) ||
-        c.shareCode.toLowerCase().includes(q) ||
-        c.user?.name?.toLowerCase().includes(q)
+        (c.title || "").toLowerCase().includes(q) ||
+        (c.shareCode || "").toLowerCase().includes(q) ||
+        (c.user?.name || "").toLowerCase().includes(q)
       );
     })
     .sort((a, b) =>
       sortBy === "votes"
-        ? b.voteCount - a.voteCount
-        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        ? (b.voteCount || 0) - (a.voteCount || 0)
+        : new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
     );
 
   const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -136,8 +149,7 @@ export default function Home() {
 
   const userCount = crosshairs.filter(c => c.userId === session?.user?.id).length;
   const canAdd    = session && (isAdmin || userCount < 3);
-  const canDelete = (cross: Crosshair) =>
-    isAdmin || cross.userId === session?.user?.id;
+  const canDelete = (cross: Crosshair) => isAdmin || cross.userId === session?.user?.id;
 
   const handleSubmit = async () => {
     setFormError("");
@@ -192,13 +204,21 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080809] text-zinc-100" style={{ fontFamily: "'DM Sans','Helvetica Neue',sans-serif" }}>
+    <div className="min-h-screen bg-[#080809] text-zinc-100 relative" style={{ fontFamily: "'DM Sans','Helvetica Neue',sans-serif" }}>
+
+      {/* ── GRAFİTİ ARKA PLAN KATMANI (Aydınlatıldı opacity 0.35) ── */}
+      <div 
+        className="fixed inset-0 z-0 pointer-events-none opacity-[0.35] mix-blend-screen bg-cover bg-no-repeat bg-[20%_center] md:bg-center"
+        style={{ 
+          backgroundImage: "url('/backgroundcross.jpg')"
+        }} 
+      />
 
       {/* ── NAVBAR ── */}
       <header className="fixed top-0 inset-x-0 z-50 border-b border-white/5 bg-[#080809]/90 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           <Link href="/" className="font-black text-white tracking-tight text-base shrink-0 hover:opacity-80 transition">
-            CS2CROSS<span className="text-red-500">HUB</span>
+            CS2CROSS<span className="text-red-600">HUB</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
@@ -259,7 +279,7 @@ export default function Home() {
         </div>
 
         {mobileNavOpen && (
-          <div className="md:hidden border-t border-white/5 bg-[#080809] px-4 py-3 flex flex-col gap-1">
+          <div className="md:hidden border-t border-white/5 bg-[#080809] px-4 py-3 flex flex-col gap-1 relative z-50">
             {(["all","pro","community"] as Tab[]).map(t => (
               <button key={t} onClick={() => { setTab(t); setMobileNavOpen(false); }}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
@@ -289,27 +309,29 @@ export default function Home() {
         )}
       </header>
 
-      <main className="pt-14">
+      <main className="pt-14 relative z-10">
 
-        {/* ── HERO ── */}
-        <section className="relative overflow-hidden border-b border-white/5">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-950/20 via-transparent to-transparent pointer-events-none" />
-          <div className="absolute inset-0 pointer-events-none" style={{
-            backgroundImage: "radial-gradient(circle at 20% 50%, rgba(220,38,38,0.06) 0%, transparent 50%)"
-          }} />
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 sm:py-20">
+        {/* ── HERO (OLD SCHOOL / GRUNGE) ── */}
+        <section className="relative overflow-hidden border-b border-white/5 bg-black/20">
+          <div className="absolute inset-0 bg-gradient-to-b from-[#080809] via-transparent to-transparent pointer-events-none" />
+          
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24 relative z-10">
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-full px-3 py-1 text-xs text-red-400 font-medium mb-5">
-                <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                {crosshairs.length} crosshairs in the library
+              
+              <div className="inline-flex items-center gap-2 bg-[#0c0c0e]/80 border border-white/10 rounded-sm px-3 py-1.5 text-xs text-zinc-300 font-bold uppercase tracking-widest mb-6 backdrop-blur-sm shadow-sm">
+                <span className="w-2 h-2 bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
+                {crosshairs.length} crosshairs
               </div>
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-[1.05] tracking-tight mb-4">
+              
+              <h1 className="text-5xl sm:text-6xl md:text-7xl font-black text-white leading-[0.95] tracking-tighter mb-6 uppercase" 
+                  style={{ textShadow: "4px 4px 0px rgba(0,0,0,0.8)" }}>
                 Find your<br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
+                <span className="text-red-600">
                   perfect aim.
                 </span>
               </h1>
-              <p className="text-zinc-500 text-base sm:text-lg leading-relaxed">
+              
+              <p className="text-zinc-300 text-base sm:text-lg font-medium leading-relaxed max-w-lg drop-shadow-lg bg-black/40 border border-white/5 p-4 rounded-sm backdrop-blur-sm">
                 Discover, copy and share Counter-Strike 2 crosshair codes from pro players and the community.
               </p>
             </div>
@@ -318,7 +340,7 @@ export default function Home() {
 
         {/* ── SHARE FORM ── */}
         {showForm && session && (
-          <section ref={formRef} className="border-b border-white/5 bg-[#0c0c0e]">
+          <section ref={formRef} className="border-b border-white/5 bg-[#0c0c0e]/95 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
               <div className="max-w-2xl">
                 <h2 className="text-xl font-bold text-white mb-6">Share a Crosshair</h2>
@@ -335,7 +357,6 @@ export default function Home() {
                       </label>
                       <select value={category} onChange={e => setCategory(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 transition-all">
-                        {/* option etiketlerine bg eklendi */}
                         <option value="community" className="bg-[#0c0c0e] text-white">Community</option>
                         {isAdmin && <option value="pro" className="bg-[#0c0c0e] text-white">Pro Player</option>}
                       </select>
@@ -344,7 +365,6 @@ export default function Home() {
                       <label className="text-xs text-zinc-500 uppercase tracking-widest font-bold block mb-2">Aspect Ratio</label>
                       <select value={resolution} onChange={e => setResolution(e.target.value)}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 transition-all">
-                        {/* option etiketlerine bg eklendi */}
                         <option value="16:9" className="bg-[#0c0c0e] text-white">16:9 (Native)</option>
                         <option value="4:3" className="bg-[#0c0c0e] text-white">4:3 (Stretched)</option>
                         <option value="16:10" className="bg-[#0c0c0e] text-white">16:10</option>
@@ -361,7 +381,7 @@ export default function Home() {
                   )}
                   <div className="flex gap-3 pt-1">
                     <button onClick={handleSubmit} disabled={submitting}
-                      className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-8 py-3 rounded-lg font-bold text-sm transition-all">
+                      className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-8 py-3 rounded-lg font-bold text-sm transition-all shadow-lg shadow-red-500/20">
                       {submitting ? "Publishing..." : "Publish"}
                     </button>
                     <button onClick={() => { setShowForm(false); setFormError(""); }}
@@ -386,7 +406,7 @@ export default function Home() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search by name, player or code..."
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none focus:border-red-500/40 focus:bg-white/[0.07] transition-all"
+                className="w-full bg-[#0a0a0c]/80 backdrop-blur-md border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 outline-none focus:border-red-500/40 focus:bg-white/[0.07] transition-all"
               />
               {search && (
                 <button onClick={() => setSearch("")}
@@ -399,8 +419,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* 1. Kategori Filtresi */}
-              <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
+              <div className="flex items-center bg-[#0a0a0c]/80 backdrop-blur-md border border-white/5 rounded-xl p-1 gap-0.5">
                 {(["all","pro","community"] as Tab[]).map(t => (
                   <button key={t} onClick={() => setTab(t)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
@@ -411,8 +430,7 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* 2. Çözünürlük Filtresi (YENİ) */}
-              <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
+              <div className="flex items-center bg-[#0a0a0c]/80 backdrop-blur-md border border-white/5 rounded-xl p-1 gap-0.5">
                 {(["all", "4:3", "16:9", "16:10"]).map(r => (
                   <button key={r} onClick={() => setResFilter(r)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-all ${
@@ -423,8 +441,7 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* 3. Sıralama Filtresi */}
-              <div className="flex items-center bg-white/5 rounded-xl p-1 gap-0.5">
+              <div className="flex items-center bg-[#0a0a0c]/80 backdrop-blur-md border border-white/5 rounded-xl p-1 gap-0.5">
                 <button onClick={() => setSortBy("votes")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     sortBy === "votes" ? "bg-white text-black" : "text-zinc-500 hover:text-white"
@@ -448,7 +465,7 @@ export default function Home() {
           </div>
 
           {search && (
-            <p className="text-xs text-zinc-600 mt-3">
+            <p className="text-xs text-zinc-400 mt-3 drop-shadow-md">
               {filtered.length} result{filtered.length !== 1 ? "s" : ""} for &ldquo;{search}&rdquo;
             </p>
           )}
@@ -463,8 +480,8 @@ export default function Home() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-24">
-              <p className="text-zinc-600 text-lg">
+            <div className="text-center py-24 bg-[#0a0a0c]/60 backdrop-blur-sm rounded-2xl border border-white/5">
+              <p className="text-zinc-400 text-lg drop-shadow-md">
                 {search ? `No results for "${search}"` : "No crosshairs here yet."}
               </p>
               {search
@@ -477,26 +494,29 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {paginated.map((cross, i) => (
                   <article key={cross.id}
-                    className="group bg-[#0f0f11] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.14] hover:-translate-y-0.5 transition-all duration-200">
-                    <div className="relative bg-[#070708] h-40 flex items-center justify-center border-b border-white/[0.06] overflow-hidden">
+                    // Dış Kenarlık Eskitmesi: Koyu border ve kalın iç gölge ile elde edildi (Kumlama SİLİNDİ)
+                    className="group relative bg-[#0f0f11] rounded-xl overflow-hidden hover:-translate-y-0.5 transition-all duration-200 border border-black/80 ring-1 ring-white/5 hover:ring-white/15 shadow-[inset_0_0_40px_rgba(0,0,0,0.9)]">
+                    
+                    {/* ── ÜST: YUMUŞAK VE TEMİZ PREVIEW KUTUSU ── */}
+                    <div className="relative bg-[#0a0a0c] h-40 flex items-center justify-center border-b border-black/60 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-20">
                       <CrosshairPreview shareCode={cross.shareCode} size={128} />
                       
                       <div className="absolute top-3 left-3 flex gap-1.5">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${
                           cross.category === "pro"
                             ? "bg-amber-400/10 text-amber-400 border border-amber-400/20"
                             : "bg-sky-400/10 text-sky-400 border border-sky-400/20"
                         }`}>
                           {cross.category}
                         </span>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider bg-white/10 text-zinc-300 border border-white/20 backdrop-blur-sm">
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider bg-black/40 text-zinc-300 border border-white/10 backdrop-blur-md shadow-sm">
                           {cross.resolution || "16:9"}
                         </span>
                       </div>
 
                       {canDelete(cross) && (
                         <button onClick={() => handleDelete(cross.id)}
-                          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg bg-black/60 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all"
+                          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg bg-black/80 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all border border-white/5"
                           title="Delete">
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -505,26 +525,27 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="p-4">
+                    {/* ── ALT: BİLGİLER ── */}
+                    <div className="p-4 relative z-20">
                       <div className="flex items-start justify-between mb-3">
                         <div className="min-w-0">
-                          <h3 className="font-bold text-white text-[15px] truncate">{cross.title}</h3>
+                          <h3 className="font-bold text-white text-[15px] truncate drop-shadow-md">{cross.title}</h3>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <img src={cross.user?.image} alt="" className="w-4 h-4 rounded-full opacity-70" />
-                            <span className="text-xs text-zinc-600 truncate max-w-[90px]">{cross.user?.name}</span>
-                            <span className="text-zinc-700 text-xs">·</span>
-                            <span className="text-xs text-zinc-700">{timeAgo(cross.createdAt)}</span>
+                            <img src={cross.user?.image} alt="" className="w-4 h-4 rounded-full opacity-90 object-cover" />
+                            <span className="text-xs text-zinc-400 truncate max-w-[90px]">{cross.user?.name}</span>
+                            <span className="text-zinc-600 text-xs">·</span>
+                            <span className="text-xs text-zinc-500">{timeAgo(cross.createdAt)}</span>
                           </div>
                         </div>
                         <button onClick={() => handleVote(cross.id)} 
-                          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all ml-2 disabled:opacity-40 disabled:cursor-default ${cross.voted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"}`}>
+                          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all ml-2 disabled:opacity-40 disabled:cursor-default shadow-sm ${cross.voted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-black/40 border border-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"}`}>
                           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
                           </svg>
                           <span className="text-xs font-bold">{cross.voteCount}</span>
                         </button>
                       </div>
-                      <div className="bg-black/40 rounded-lg px-3 py-2 mb-3 font-mono text-[10px] text-zinc-500 truncate border border-white/[0.04]">
+                      <div className="bg-black/60 rounded-lg px-3 py-2 mb-3 font-mono text-[10px] text-zinc-400 truncate border border-white/[0.04] shadow-inner">
                         {cross.shareCode}
                       </div>
                       <CopyButton code={cross.shareCode} />
@@ -537,7 +558,7 @@ export default function Home() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-10">
                   <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                    className="flex items-center gap-1 px-4 py-2 rounded-lg bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition text-sm font-medium">
+                    className="flex items-center gap-1 px-4 py-2 rounded-lg bg-[#0a0a0c]/80 backdrop-blur-sm border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition text-sm font-medium">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
                     </svg>
@@ -554,11 +575,11 @@ export default function Home() {
                       }, [])
                       .map((p, i) =>
                         p === "…" ? (
-                          <span key={`ellipsis-${i}`} className="px-2 text-zinc-600 text-sm">…</span>
+                          <span key={`ellipsis-${i}`} className="px-2 text-zinc-600 text-sm drop-shadow-md">…</span>
                         ) : (
                           <button key={p} onClick={() => setPage(p as number)}
                             className={`w-9 h-9 rounded-lg text-sm font-semibold transition-all ${
-                              page === p ? "bg-white text-black" : "text-zinc-500 hover:text-white hover:bg-white/10"
+                              page === p ? "bg-white text-black shadow-lg" : "bg-[#0a0a0c]/80 backdrop-blur-sm border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
                             }`}>
                             {p}
                           </button>
@@ -567,7 +588,7 @@ export default function Home() {
                   </div>
 
                   <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                    className="flex items-center gap-1 px-4 py-2 rounded-lg bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition text-sm font-medium">
+                    className="flex items-center gap-1 px-4 py-2 rounded-lg bg-[#0a0a0c]/80 backdrop-blur-sm border border-white/5 text-zinc-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-default transition text-sm font-medium">
                     Next
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
@@ -580,29 +601,29 @@ export default function Home() {
         </section>
         
         {/* ── SEO & FAQ SECTION ── */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 border-t border-white/5 mt-12">
-          <h2 className="text-2xl font-bold text-white mb-8">Frequently Asked Questions</h2>
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 border-t border-white/5 mt-12 bg-[#0a0a0c]/40 backdrop-blur-md rounded-t-3xl">
+          <h2 className="text-2xl font-bold text-white mb-8 drop-shadow-md">Frequently Asked Questions</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-400">
             <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2">How do I use a CS2 crosshair code?</h3>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">How do I use a CS2 crosshair code?</h3>
               <p className="text-sm leading-relaxed">
                 To use a crosshair code in Counter-Strike 2, simply click the "Copy" button on any crosshair profile on our site. Open your CS2 settings, navigate to Game {'>'} Crosshair, and click on "Share or Import". Paste the copied code into the text box and click "Import". Your new crosshair will be applied instantly.
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2">Are these crosshairs used by CS2 pro players?</h3>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">Are these crosshairs used by CS2 pro players?</h3>
               <p className="text-sm leading-relaxed">
                 Yes! CS2CrossHub regularly updates its database with the exact crosshair settings used by top CS2 esports professionals. Whether you are looking for s1mple's dot crosshair or m0NESY's dynamic setup, you can find and preview them live before importing them into your game.
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2">Why is choosing the right crosshair important in CS2?</h3>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">Why is choosing the right crosshair important in CS2?</h3>
               <p className="text-sm leading-relaxed">
                 A properly configured crosshair improves your visibility, spray control, and overall aim accuracy. Depending on your screen resolution, aspect ratio (like 4:3 stretched), and personal preference, finding the perfect gap, thickness, and color can significantly impact your matchmaking rank and Premier rating.
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2">Can I share my own crosshair?</h3>
+              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">Can I share my own crosshair?</h3>
               <p className="text-sm leading-relaxed">
                 Absolutely. CS2CrossHub is built for the community. You can easily export your own crosshair code from the CS2 settings menu and submit it to our platform. Sharing your unique crosshair helps other players discover new playstyles and aim techniques.
               </p>
@@ -620,12 +641,12 @@ export default function Home() {
       )}
 
       {/* ── FOOTER ── */}
-      <footer className="border-t border-white/5 bg-[#0a0a0c] py-16">
+      <footer className="relative z-10 border-t border-white/5 bg-[#0a0a0c]/90 backdrop-blur-xl py-16">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-10">
             <div className="space-y-4 text-center md:text-left">
-              <Link href="/" className="text-2xl font-black tracking-tighter text-white">
-                CS2CROSS<span className="text-red-500">HUB</span>
+              <Link href="/" className="text-2xl font-black tracking-tighter text-white drop-shadow-lg">
+                CS2CROSS<span className="text-red-600">HUB</span>
               </Link>
               <p className="text-zinc-500 text-sm max-w-xs leading-relaxed">
                 The ultimate community-driven library for Counter-Strike 2 crosshairs. Discover, share, and improve your aim.
