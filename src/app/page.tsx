@@ -56,6 +56,34 @@ function CopyButton({ code }: { code: string }) {
   );
 }
 
+// YENİ: Bireysel Linki Kopyalama Butonu
+function ShareLinkButton({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        if (typeof window !== "undefined" && navigator.clipboard) {
+          navigator.clipboard.writeText(`${window.location.origin}/crosshair/${id}`);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }
+      }}
+      className={`w-11 flex-shrink-0 flex items-center justify-center border transition-all rounded-lg ${
+        copied ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400" : "bg-black/40 border-white/5 hover:bg-white/10 text-zinc-400 hover:text-white"
+      }`}
+      title="Copy Link to Share"
+    >
+      {copied ? (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+      ) : (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,12 +234,10 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#080809] text-zinc-100 relative" style={{ fontFamily: "'DM Sans','Helvetica Neue',sans-serif" }}>
 
-      {/* ── GRAFİTİ ARKA PLAN KATMANI (Aydınlatıldı opacity 0.35) ── */}
+      {/* ── GRAFİTİ ARKA PLAN KATMANI (Mobilde sola kaydırıldı, PC'de ortalı) ── */}
       <div 
         className="fixed inset-0 z-0 pointer-events-none opacity-[0.35] mix-blend-screen bg-cover bg-no-repeat bg-[20%_center] md:bg-center"
-        style={{ 
-          backgroundImage: "url('/backgroundcross.jpg')"
-        }} 
+        style={{ backgroundImage: "url('/backgroundcross.jpg')" }} 
       />
 
       {/* ── NAVBAR ── */}
@@ -494,62 +520,79 @@ export default function Home() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {paginated.map((cross, i) => (
                   <article key={cross.id}
-                    // Dış Kenarlık Eskitmesi: Koyu border ve kalın iç gölge ile elde edildi (Kumlama SİLİNDİ)
                     className="group relative bg-[#0f0f11] rounded-xl overflow-hidden hover:-translate-y-0.5 transition-all duration-200 border border-black/80 ring-1 ring-white/5 hover:ring-white/15 shadow-[inset_0_0_40px_rgba(0,0,0,0.9)]">
                     
-                    {/* ── ÜST: YUMUŞAK VE TEMİZ PREVIEW KUTUSU ── */}
-                    <div className="relative bg-[#0a0a0c] h-40 flex items-center justify-center border-b border-black/60 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-20">
-                      <CrosshairPreview shareCode={cross.shareCode} size={128} />
-                      
-                      <div className="absolute top-3 left-3 flex gap-1.5">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${
-                          cross.category === "pro"
-                            ? "bg-amber-400/10 text-amber-400 border border-amber-400/20"
-                            : "bg-sky-400/10 text-sky-400 border border-sky-400/20"
-                        }`}>
-                          {cross.category}
-                        </span>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider bg-black/40 text-zinc-300 border border-white/10 backdrop-blur-md shadow-sm">
-                          {cross.resolution || "16:9"}
-                        </span>
-                      </div>
-
-                      {canDelete(cross) && (
-                        <button onClick={() => handleDelete(cross.id)}
-                          className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg bg-black/80 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all border border-white/5"
-                          title="Delete">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* ── ALT: BİLGİLER ── */}
-                    <div className="p-4 relative z-20">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="min-w-0">
-                          <h3 className="font-bold text-white text-[15px] truncate drop-shadow-md">{cross.title}</h3>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <img src={cross.user?.image} alt="" className="w-4 h-4 rounded-full opacity-90 object-cover" />
-                            <span className="text-xs text-zinc-400 truncate max-w-[90px]">{cross.user?.name}</span>
-                            <span className="text-zinc-600 text-xs">·</span>
-                            <span className="text-xs text-zinc-500">{timeAgo(cross.createdAt)}</span>
-                          </div>
+                    <div className="relative z-20">
+                      <div className="relative bg-[#0a0a0c] h-40 flex items-center justify-center border-b border-black/60 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] z-20">
+                        {/* BAŞLIĞA TIKLAYINCA DA DETAYA GİDECEK */}
+                        <Link href={`/crosshair/${cross.id}`} className="absolute inset-0 z-10" />
+                        <div className="relative z-0">
+                          <CrosshairPreview shareCode={cross.shareCode} size={128} />
                         </div>
-                        <button onClick={() => handleVote(cross.id)} 
-                          className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all ml-2 disabled:opacity-40 disabled:cursor-default shadow-sm ${cross.voted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-black/40 border border-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"}`}>
-                          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
-                          </svg>
-                          <span className="text-xs font-bold">{cross.voteCount}</span>
-                        </button>
+                        
+                        <div className="absolute top-3 left-3 flex gap-1.5 z-20">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${
+                            cross.category === "pro"
+                              ? "bg-amber-400/10 text-amber-400 border border-amber-400/20"
+                              : "bg-sky-400/10 text-sky-400 border border-sky-400/20"
+                          }`}>
+                            {cross.category}
+                          </span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider bg-black/40 text-zinc-300 border border-white/10 backdrop-blur-md shadow-sm">
+                            {cross.resolution || "16:9"}
+                          </span>
+                        </div>
+
+                        {canDelete(cross) && (
+                          <button onClick={() => handleDelete(cross.id)}
+                            className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg bg-black/80 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all border border-white/5 z-20"
+                            title="Delete">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                          </button>
+                        )}
                       </div>
-                      <div className="bg-black/60 rounded-lg px-3 py-2 mb-3 font-mono text-[10px] text-zinc-400 truncate border border-white/[0.04] shadow-inner">
-                        {cross.shareCode}
+
+                      <div className="p-4 relative z-20">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-white text-[15px] truncate drop-shadow-md">
+                              {/* BAŞLIK ARTIK TIKLANABİLİR BİR LİNK */}
+                              <Link href={`/crosshair/${cross.id}`} className="hover:text-red-400 transition-colors">
+                                {cross.title}
+                              </Link>
+                            </h3>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <img src={cross.user?.image} alt="" className="w-4 h-4 rounded-full opacity-90 object-cover" />
+                              <span className="text-xs text-zinc-400 truncate max-w-[90px]">{cross.user?.name}</span>
+                              <span className="text-zinc-600 text-xs">·</span>
+                              <span className="text-xs text-zinc-500">{timeAgo(cross.createdAt)}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => handleVote(cross.id)} 
+                            className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all ml-2 disabled:opacity-40 disabled:cursor-default shadow-sm ${cross.voted ? "bg-red-500/20 text-red-400 hover:bg-red-500/30" : "bg-black/40 border border-white/5 text-zinc-400 hover:bg-red-500/10 hover:text-red-400"}`}>
+                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"/>
+                            </svg>
+                            <span className="text-xs font-bold">{cross.voteCount}</span>
+                          </button>
+                        </div>
+                        <div className="bg-black/60 rounded-lg px-3 py-2 mb-3 font-mono text-[10px] text-zinc-400 truncate border border-white/[0.04] shadow-inner">
+                          {cross.shareCode}
+                        </div>
+                        
+                        {/* KOPYALA BUTONU VE PAYLAŞ BUTONU YAN YANA */}
+                        <div className="flex gap-2">
+                          <CopyButton code={cross.shareCode} />
+                          <ShareLinkButton id={cross.id} />
+                        </div>
+
                       </div>
-                      <CopyButton code={cross.shareCode} />
                     </div>
+                    
+                    {/* SADECE VIGNETTE (İÇ GÖLGE) BIRAKILDI, KUM/PÜRÜZ EFEKTİ KALDIRILDI */}
+                    <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_50px_rgba(0,0,0,0.8)] z-30" />
                   </article>
                 ))}
               </div>
@@ -600,33 +643,50 @@ export default function Home() {
           )}
         </section>
         
-        {/* ── SEO & FAQ SECTION ── */}
+        {/* ── ULTIMATE CS2 CROSSHAIR GUIDE (SEO & ADSENSE CONTENT) ── */}
         <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 border-t border-white/5 mt-12 bg-[#0a0a0c]/40 backdrop-blur-md rounded-t-3xl">
-          <h2 className="text-2xl font-bold text-white mb-8 drop-shadow-md">Frequently Asked Questions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-400">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">How do I use a CS2 crosshair code?</h3>
-              <p className="text-sm leading-relaxed">
-                To use a crosshair code in Counter-Strike 2, simply click the "Copy" button on any crosshair profile on our site. Open your CS2 settings, navigate to Game {'>'} Crosshair, and click on "Share or Import". Paste the copied code into the text box and click "Import". Your new crosshair will be applied instantly.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">Are these crosshairs used by CS2 pro players?</h3>
-              <p className="text-sm leading-relaxed">
-                Yes! CS2CrossHub regularly updates its database with the exact crosshair settings used by top CS2 esports professionals. Whether you are looking for s1mple's dot crosshair or m0NESY's dynamic setup, you can find and preview them live before importing them into your game.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">Why is choosing the right crosshair important in CS2?</h3>
-              <p className="text-sm leading-relaxed">
-                A properly configured crosshair improves your visibility, spray control, and overall aim accuracy. Depending on your screen resolution, aspect ratio (like 4:3 stretched), and personal preference, finding the perfect gap, thickness, and color can significantly impact your matchmaking rank and Premier rating.
-              </p>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-200 mb-2 drop-shadow-sm">Can I share my own crosshair?</h3>
-              <p className="text-sm leading-relaxed">
-                Absolutely. CS2CrossHub is built for the community. You can easily export your own crosshair code from the CS2 settings menu and submit it to our platform. Sharing your unique crosshair helps other players discover new playstyles and aim techniques.
-              </p>
+          <div className="max-w-4xl">
+            <h2 className="text-3xl font-black text-white mb-6 drop-shadow-md tracking-tight">The Ultimate Guide to CS2 Crosshairs: Find Your Perfect Aim</h2>
+            
+            <div className="space-y-8 text-zinc-400 leading-relaxed text-sm sm:text-base">
+              <div>
+                <h3 className="text-xl font-bold text-gray-200 mb-3 drop-shadow-sm">What is a CS2 Crosshair Share Code and How Does It Work?</h3>
+                <p>
+                  A Counter-Strike 2 (CS2) crosshair share code is a unique alphanumeric string that stores your exact crosshair settings. Introduced by Valve, these codes make it incredibly easy for players to share their configurations without manually entering console commands. A standard code looks like this: <code className="text-zinc-300 bg-white/5 px-1 rounded">CSGO-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX</code>. When you copy a code from our library, simply paste it into the "Share or Import" menu in your CS2 game settings, and your crosshair gap, thickness, color, and style will instantly update to match the pro or community setup you selected.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-bold text-gray-200 mb-3 drop-shadow-sm">Static vs. Dynamic Crosshairs: Which One Should You Choose?</h3>
+                <p className="mb-3">
+                  One of the most debated topics in the CS2 community is whether to use a static or dynamic crosshair. 
+                </p>
+                <ul className="list-disc pl-6 space-y-2">
+                  <li><strong>Static Crosshairs (Style 4):</strong> Preferred by 95% of professional players. A static crosshair does not expand when you move or shoot. It relies entirely on your muscle memory and recoil control, providing a clean, distraction-free focal point for hitting crisp headshots.</li>
+                  <li><strong>Dynamic Crosshairs (Style 5):</strong> These crosshairs expand when you walk, run, or fire your weapon. While they can be visually distracting for veterans, they are excellent training tools for beginners learning movement inaccuracy and counter-strafing timing.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-bold text-gray-200 mb-3 drop-shadow-sm">Best Crosshair Colors for Maximum Visibility</h3>
+                <p>
+                  In a fast-paced tactical shooter like CS2, losing track of your crosshair against a bright wall or a player model can cost you the round. The most effective crosshair colors are those that contrast heavily with standard map palettes (like the dusty yellows of Mirage or the gray concrete of Overpass). Cyan (Light Blue), Neon Green, and Magenta are considered the best colors for visibility. If you prefer white or yellow crosshairs, we highly recommend enabling a thin black outline (Outline = 1) to ensure your crosshair remains visible even when aiming at bright light sources.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-bold text-gray-200 mb-3 drop-shadow-sm">Why Do CS2 Pro Players Use 4:3 Stretched Aspect Ratio?</h3>
+                <p>
+                  When browsing CS2CrossHub, you will notice that many professional players use the 4:3 aspect ratio instead of the native 16:9. Playing on 4:3 stretched horizontally expands the player models, making enemies appear wider and theoretically easier to hit. However, this also affects how your crosshair renders. A crosshair that looks like a perfect square in 16:9 will look wider and slightly distorted in 4:3 stretched. That is why our platform includes a resolution tag for every crosshair, ensuring you find a setup that fits your exact monitor settings perfectly.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-bold text-gray-200 mb-3 drop-shadow-sm">How to Build and Share Your Own CS2 Crosshair</h3>
+                <p>
+                  Crafting the perfect aim takes time. You might start with s1mple's dot crosshair or NiKo's classic tight gap, but eventually, you will tweak it to fit your own playstyle. Once you have perfected your settings, you can export your unique code from the CS2 settings menu and submit it right here on CS2CrossHub. By sharing your configuration, you contribute to a growing database of competitive setups, helping thousands of other players improve their aim, spray control, and overall Premier rating.
+                </p>
+              </div>
             </div>
           </div>
         </section>
@@ -654,6 +714,7 @@ export default function Home() {
             </div>
             
             <div className="flex flex-wrap justify-center gap-x-10 gap-y-4 text-sm font-bold text-zinc-400">
+              <Link href="/about" className="hover:text-red-500 transition-colors">About Us</Link>
               <Link href="/privacy" className="hover:text-red-500 transition-colors">Privacy Policy</Link>
               <Link href="/terms" className="hover:text-red-500 transition-colors">Terms of Service</Link>
               <Link href="/contact" className="hover:text-red-500 transition-colors">Contact</Link>
